@@ -49,24 +49,20 @@ exports.getIndex = (req, res, next) => {
 };
 
 exports.getCart = (req, res, next) => {
-  Cart.getCart(cart => {
-    Product.fetchAll(products => {
-      const cartProducts = [];
-      for (product of products) {
-        const cartProductData = cart.products.find(
-          prod => prod.id === product.id
-        );
-        if (cartProductData) {
-          cartProducts.push({ productData: product, qty: cartProductData.qty });
-        }
-      }
+  req.user.getCart()
+  .then( cart =>{
+    return cart
+    .getProducts()
+    .then(products =>{
       res.render('shop/cart', {
         path: '/cart',
         pageTitle: 'Your Cart',
-        products: cartProducts
+        products: products
       });
-    });
-  });
+    }).catch(err => console.log(err));
+
+  })
+  .catch(err => console.log(err))
 };
 
 exports.postCart = (req, res, next) => {
@@ -77,9 +73,10 @@ exports.postCart = (req, res, next) => {
   .then(cart =>{
     //Cart속성중 product 객체 반환
     fetchedCart = cart
-    return cart.getProduct({where: {id: prodId}});
+    return cart.getProducts({where: {id: prodId}});
   })
-  .then(products =>{
+  .then(async (products) =>{
+    let newQuantity = 1;
     //products 중 첫번째 요소 반환
     //product가 하나도 없을시 undefined
     let product;
@@ -88,32 +85,34 @@ exports.postCart = (req, res, next) => {
     }
 
     //경우1 Cart에서 해당제품 수량 추가 
-    let newQuantity = 1;
     if(product){
-      //..
+      const oldQuantity = product.cartItem.quantity;
+      newQuantity = oldQuantity + 1;
     }
 
     //경우2 Cart에 최초로 Product 추가 
     //Cart에는 없지만, DB에는 정보가 있을것이다.
-    return Product.findByPk(prodId)
-    .then(product =>{
-      //cartProduct()는 시퀄라이즈에 의해 추가된
-      //다대다 관계 메서드 중에 하나이다.
-      //아래 코드에서는 전역변수가된 fetchedCart에
-      //검색한 상품은 추가하는 역할을 한다.
-      return fetchedCart.addProduct(); 
-    }).catch(err => console.log(err))
+    product = await Product.findByPk(prodId)
 
+    //경우1,2에서 찾은 product를 cart에 추가한다.
+    return fetchedCart.addProduct(product, { through: {quantity:newQuantity} }); 
+  })
+  .then(()=>{
+    res.redirect('/cart');
   })
   .catch(err => console.log(err));
 };
 
-exports.postCartDeleteProduct = (req, res, next) => {
+exports.postCartDeleteProduct = async (req, res, next) => {
   const prodId = req.body.productId;
-  Product.findById(prodId, product => {
-    Cart.deleteProduct(prodId, product.price);
-    res.redirect('/cart');
-  });
+  
+  const cart = await req.user.getCart();
+  const [product] = await cart.getProducts({where:{id:prodId}});
+
+  //Product있는 데이터를 제거하는 것이 아니라 
+  //CartItem에있는 데이터를 제거 
+  await product.cartItem.destroy();
+  res.redirect('/cart');
 };
 
 exports.getOrders = (req, res, next) => {
