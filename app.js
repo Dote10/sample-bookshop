@@ -8,7 +8,9 @@ const sequelize = require('./util/database');
 const Product = require ('./models/product');
 const User = require ('./models/user');
 const Cart = require('./models/cart');
-const CartItem = require('./models/cart-item'); 
+const CartItem = require('./models/cart-item');
+const Order = require('./models/order');
+const OrderItem = require('./models/order-item'); 
 
 const app = express();
 
@@ -36,6 +38,7 @@ app.use((req, res, next) => {
     })
 });
 
+//라우터 등록
 app.use('/admin', adminRoutes);
 app.use(shopRoutes);
 
@@ -45,6 +48,9 @@ app.use(errorController.get404);
 Product.belongsTo(User,{constraints: true, onDelete:'CASCADE'})
 User.hasMany(Product);
 
+Order.belongsTo(User,{constraints: true, onDelete:'CASCADE'})
+User.hasMany(Order);
+
 // 1:1
 User.hasOne(Cart);
 Cart.belongsTo(User);
@@ -53,6 +59,8 @@ Cart.belongsTo(User);
 Cart.belongsToMany(Product, {through : CartItem});
 Product.belongsToMany(Cart, {through : CartItem});
 
+Order.belongsToMany(Product,{through : OrderItem});
+Product.belongsToMany(Order,{through : OrderItem});
 
 sequelize
 .sync()
@@ -70,14 +78,14 @@ sequelize
     if(user.length < 1){
         return User.create({name:'Max', email:'test@example.com'})
     }
-    return user;
+    return user[0];
 })
 .then( user => {
     //console.log(user);
-    if(user[0].cart){
-        return user[0].createCart();
+    if(!user?.cart){
+        return user.createCart();
     }
-    return user[0].cart;
+    return user.cart;
 })
 .then(cart => {
     app.listen(6300);

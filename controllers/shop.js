@@ -115,6 +115,18 @@ exports.postCartDeleteProduct = async (req, res, next) => {
   res.redirect('/cart');
 };
 
+exports.postOrder = async (req, res, next) => {
+  const cart = await req.user.getCart();
+  const products = await cart.getProducts();
+  const order = await req.user.createOrder();
+  const result = await order.addProducts( products.map(product => {
+    product.orderItem = { quantity: product.cartItem.quantity };
+    return product
+  }));
+  console.log(result);
+  res.redirect('/orders');
+};
+
 exports.getOrders = (req, res, next) => {
   res.render('shop/orders', {
     path: '/orders',
